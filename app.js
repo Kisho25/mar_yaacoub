@@ -1,5 +1,6 @@
 const EXCHANGE_RATE = 90000;
 const activitiesOnly = Boolean(window.KERMESS_ACTIVITIES_ONLY) || /\/games(?:\/index\.html)?\/?$/.test(window.location.pathname);
+const LEGACY_DONATION_ID = 102;
 
 const products = [
   { id: 1, name: "Kaak Plain", price: 150000, category: "Food", icon: "🫓" },
@@ -16,7 +17,8 @@ const products = [
   { id: 12, name: "Nescafé 2 in 1", price: 100000, category: "Drinks", icon: "☕" },
   { id: 13, name: "Black Coffee", price: 100000, category: "Drinks", icon: "☕" },
   { id: 14, name: "Cappuccino", price: 100000, category: "Drinks", icon: "☕" },
-  { id: 15, name: "Hot Chocolate", price: 100000, category: "Drinks", icon: "🍫" }
+  { id: 15, name: "Hot Chocolate", price: 100000, category: "Drinks", icon: "🍫" },
+  { id: 101, name: "Cakes Fersen", price: 30000, category: "Sweets", icon: "🍰" }
 ];
 
 // [Kermess sale price, provider/person price, provider, contact]
@@ -35,7 +37,8 @@ const foodFinancials = {
   12: [100000, 29700, "Kaak menu cost", ""],
   13: [100000, 20300, "Kaak menu cost", ""],
   14: [100000, 29600, "Kaak menu cost", ""],
-  15: [100000, 34600, "Kaak menu cost", ""]
+  15: [100000, 34600, "Kaak menu cost", ""],
+  101: [30000, 0, "Fersen", ""]
 };
 
 products.forEach(product => {
@@ -48,7 +51,7 @@ products.forEach(product => {
 });
 
 const accents = { Food: "#f7dfcb", Sweets: "#f2dce5", Drinks: "#dcecf2", Snacks: "#eee4ca", Activities: "#dce9df" };
-const categories = activitiesOnly ? [] : ["All", "Food", "Drinks"];
+const categories = activitiesOnly ? [] : ["All", "Food", "Sweets", "Drinks"];
 let activeCategory = activitiesOnly ? "Activities" : "All";
 let cart = {};
 let completedCart = null;
@@ -65,10 +68,12 @@ let orderNumber = Number(localStorage.getItem("kermessOrderNumber")) || 1;
 let currentSaleRecorded = false;
 let currentSaleId = null;
 let lastReportSales = sales;
+let lastReportDonations = [];
 let reportSource = sales;
+let reportDonations = [];
 let invoiceData = [];
 let editingSale = null;
-let syncInProgress = false;
+let syncInProgress = null;
 let reportSort = { key: "name", direction: "asc" };
 const cloud = window.KERMESS_CONFIG || {};
 const cloudEnabled = Boolean(cloud.supabaseUrl && cloud.supabaseAnonKey);
@@ -91,11 +96,51 @@ localStorage.setItem("kermessSalesDay", selectedSalesDay);
 
 // Upgrade sales created by earlier versions so they can safely synchronize once.
 sales = sales.map(sale => ({ ...sale, id: sale.id || makeId(), eventDay: sale.eventDay || eventDayFromDate(sale.completedAt), deletedAt: sale.deletedAt || null, synced: sale.synced === true }));
+let donations = JSON.parse(localStorage.getItem("kermessDonations") || "[]");
+const knownDonationIds = new Set(donations.map(donation => donation.id));
+sales = sales.filter(sale => {
+  const donation = readLegacyDonation(sale);
+  if (!donation) return true;
+  if (!knownDonationIds.has(donation.id)) {
+    donations.push(donation);
+    knownDonationIds.add(donation.id);
+  }
+  // Keep the original lines of mixed historical invoices for any future invoice edit.
+  return !sale.items.some(item => item.kind === "donation") && sale.items.some(item => Number(item.id) !== LEGACY_DONATION_ID);
+});
+localStorage.setItem("kermessDonations", JSON.stringify(donations));
 localStorage.setItem("kermessSales", JSON.stringify(sales));
 
 const $ = (selector) => document.querySelector(selector);
 const formatLbp = (amount) => `${new Intl.NumberFormat("en-US").format(amount)} LBP`;
 const formatUsd = (amount) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount / EXCHANGE_RATE);
+const usdCurrency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const formatReceived = (amount, currency) => currency === "USD" ? usdCurrency.format(amount) : formatLbp(amount);
+
+function readLegacyDonation(record) {
+  const { id, eventDay, completedAt, deletedAt } = record;
+  const terminal = record.terminalId || terminalId;
+  const entry = record.items.find(item => item.kind === "donation");
+  if (entry) {
+    if (!Number.isSafeInteger(entry.amountLbp) || entry.amountLbp <= 0 || !Number.isFinite(entry.enteredAmount)) return null;
+    return {
+      id, eventDay, completedAt, deletedAt, terminalId: terminal, synced: false,
+      localNumber: record.localOrderNumber || record.orderNumber || 0,
+      number: entry.number, enteredAmount: entry.enteredAmount,
+      enteredCurrency: entry.enteredCurrency, amountLbp: entry.amountLbp
+    };
+  }
+
+  const amountLbp = record.items
+    .filter(item => Number(item.id) === LEGACY_DONATION_ID)
+    .reduce((sum, item) => sum + item.quantity * item.price, 0);
+  if (!amountLbp) return null;
+  const number = `D-OLD-${record.id.slice(0, 8).toUpperCase()}`;
+  return {
+    id, eventDay, completedAt, deletedAt, terminalId: terminal, localNumber: 0, synced: false,
+    number, enteredAmount: amountLbp, enteredCurrency: "LBP", amountLbp
+  };
+}
 
 function populateDayFilter(selector, source, preferred = selectedSalesDay) {
   const select = $(selector);
@@ -199,6 +244,57 @@ function changeQuantity(id, amount) {
   renderCart();
 }
 
+function openDonation() {
+  const form = $("#donationForm");
+  form.reset();
+  $("#donationStatus").textContent = "";
+  updateDonationAmount();
+  $("#donationDialog").showModal();
+}
+
+function updateDonationAmount() {
+  const input = $("#donationAmount");
+  formatCashInput(input);
+  const amount = readCashAmount(input.value);
+  const valid = amount && amount.tenderedLbp > 0;
+  $("#donationCurrency").textContent = valid ? amount.enteredCurrency : "—";
+  $("#donationValue").textContent = valid && amount.enteredCurrency === "USD" ? formatLbp(amount.tenderedLbp) : "";
+  $("#saveDonation").disabled = !valid;
+  $("#donationStatus").textContent = "";
+}
+
+function recordDonation(event) {
+  event.preventDefault();
+  const amount = readCashAmount($("#donationAmount").value);
+  if (!amount || amount.tenderedLbp <= 0) return;
+
+  const localNumber = donations.reduce((highest, record) => {
+    return record.terminalId === terminalId ? Math.max(highest, record.localNumber) : highest;
+  }, 0) + 1;
+  const number = `D-${terminalId.slice(0, 8).toUpperCase()}-${String(localNumber).padStart(3, "0")}`;
+  const completedAt = new Date().toISOString();
+  const record = {
+    id: makeId(), terminalId, localNumber, number,
+    eventDay: eventDayFromDate(completedAt), completedAt, deletedAt: null, synced: false,
+    enteredAmount: amount.enteredAmount, enteredCurrency: amount.enteredCurrency,
+    amountLbp: amount.tenderedLbp
+  };
+  const updatedDonations = [...donations, record];
+  try {
+    localStorage.setItem("kermessDonations", JSON.stringify(updatedDonations));
+  } catch (error) {
+    console.warn(error);
+    $("#donationStatus").textContent = "Donation could not be saved. Please try again.";
+    return;
+  }
+  donations = updatedDonations;
+  $("#donationForm").reset();
+  updateDonationAmount();
+  $("#donationStatus").textContent = `Donation #${number} recorded · ${formatReceived(record.enteredAmount, record.enteredCurrency)}`;
+  $("#donationAmount").focus();
+  syncPendingSales();
+}
+
 function showCompletedSale() {
   const items = cartDetails();
   const count = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -219,8 +315,9 @@ function showCompletedSale() {
 function closeSale() { $("#saleModal").hidden = true; }
 
 function startNewOrder() {
+  if (!completedCart) return;
   const payment = calculateChange();
-  if (!completedCart || !payment || payment.changeLbp < 0) return;
+  if (!payment || payment.changeLbp < 0) return;
   if (!currentSaleRecorded) {
     currentSaleId ||= makeId();
     const hiddenItems = editingSale ? editingSale.originalItems.filter(item => !productBelongsToPage(item.id)) : [];
@@ -244,38 +341,46 @@ function startNewOrder() {
   renderCart();
 }
 
-function calculateChange() {
-  const raw = $("#paymentAmount").value.replace(/,/g, "").replace(/\s/g, "");
+function readCashAmount(value) {
+  const raw = value.replace(/[,\s]/g, "");
+  if (!/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(raw)) return null;
   const amount = Number(raw);
-  if (!raw || !Number.isFinite(amount) || amount < 0) {
+  const currency = amount < 1000 ? "USD" : "LBP";
+  const tenderedLbp = Math.round(currency === "USD" ? amount * EXCHANGE_RATE : amount);
+  if (!Number.isSafeInteger(tenderedLbp)) return null;
+  return { enteredAmount: amount, enteredCurrency: currency, tenderedLbp };
+}
+
+function calculateChange() {
+  const payment = readCashAmount($("#paymentAmount").value);
+  if (!payment || !completedCart) {
     $("#detectedCurrency").textContent = "—";
     $("#changeResult").hidden = true;
     $("#newOrder").disabled = true;
     return null;
   }
-  const currency = amount <= 999 ? "USD" : "LBP";
-  const tenderedLbp = currency === "USD" ? Math.round(amount * EXCHANGE_RATE) : Math.round(amount);
-  const changeLbp = tenderedLbp - completedCart.total;
+  const changeLbp = payment.tenderedLbp - completedCart.total;
   const enough = changeLbp >= 0;
-  $("#detectedCurrency").textContent = currency;
+  $("#detectedCurrency").textContent = payment.enteredCurrency;
   $("#changeResult").hidden = false;
   $("#changeResult").classList.toggle("insufficient", !enough);
   $("#changeLabel").textContent = enough ? "Change to return" : "Amount still due";
   $("#changeLbp").textContent = formatLbp(Math.abs(changeLbp));
   $("#changeUsd").textContent = formatUsd(Math.abs(changeLbp));
   $("#newOrder").disabled = !enough;
-  return { enteredAmount: amount, enteredCurrency: currency, tenderedLbp, changeLbp };
+  return { ...payment, changeLbp };
+}
+
+function formatCashInput(input) {
+  const raw = input.value.replace(/[,\s]/g, "");
+  if (!/^\d*(?:\.\d{0,2})?$/.test(raw)) return;
+  const [whole, decimal] = raw.split(".");
+  const grouped = whole.replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  input.value = decimal === undefined ? grouped : `${grouped}.${decimal}`;
 }
 
 function formatPaymentAmount() {
-  const input = $("#paymentAmount");
-  const cleaned = input.value.replace(/,/g, "").replace(/[^0-9.]/g, "");
-  const parts = cleaned.split(".");
-  let whole = parts.shift() || "";
-  const decimal = parts.join("").slice(0, 2);
-  whole = whole.replace(/^0+(?=\d)/, "");
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  input.value = grouped + (cleaned.includes(".") ? `.${decimal}` : "");
+  formatCashInput($("#paymentAmount"));
   calculateChange();
 }
 
@@ -309,12 +414,14 @@ function sortReportRows(rows) {
 
 function renderReport() {
   const day = eventDayFromDate();
-  const relevantSales = reportSource
-    .filter(sale => !sale.deletedAt)
-    .filter(sale => sale.eventDay === day)
+  const activeRecords = reportSource.filter(record => !record.deletedAt && record.eventDay === day);
+  const relevantSales = activeRecords
     .map(sale => ({ ...sale, items: sale.items.filter(item => productBelongsToPage(item.id)) }))
     .filter(sale => sale.items.length);
   lastReportSales = relevantSales;
+  lastReportDonations = reportDonations.filter(donation => !donation.deletedAt && donation.eventDay === day)
+    .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+  const donationTotal = lastReportDonations.reduce((sum, donation) => sum + donation.amountLbp, 0);
   const rows = sortReportRows(reportData(relevantSales));
   const sold = rows.reduce((sum, row) => sum + row.quantity, 0);
   const revenue = rows.reduce((sum, row) => sum + row.revenue, 0);
@@ -322,10 +429,14 @@ function renderReport() {
   const profit = rows.reduce((sum, row) => sum + (row.profit || 0), 0);
   const pending = rows.some(row => row.payment == null);
   $("#reportTimestamp").textContent = `${day === "all" ? "All event days" : formatEventDay(day)} · ${relevantSales.length} completed orders · Updated ${new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date())}`;
-  $("#reportStats").innerHTML = `<div class="stat-card"><span>Items sold</span><strong>${sold}</strong></div><div class="stat-card"><span>Pay providers</span><strong>${formatLbp(payment)}${pending ? "*" : ""}</strong></div><div class="stat-card profit"><span>Profit</span><strong>${formatLbp(profit)}${pending ? "*" : ""}</strong></div><div class="stat-card cashier"><span>Cashier total</span><strong>${formatLbp(revenue)}</strong><small>${formatUsd(revenue)}</small></div>`;
-  $("#emptyReport").hidden = rows.length !== 0;
+  const totalProfit = profit + donationTotal;
+  const cashierTotal = revenue + donationTotal;
+  $("#reportStats").innerHTML = `<div class="stat-card"><span>Items sold</span><strong>${sold}</strong></div><div class="stat-card"><span>Pay providers</span><strong>${formatLbp(payment)}${pending ? "*" : ""}</strong></div><div class="stat-card profit"><span>Total profit</span><strong>${formatLbp(totalProfit)}${pending ? "*" : ""}</strong></div><div class="stat-card cashier"><span>Cashier total</span><strong>${formatLbp(cashierTotal)}</strong><small>${formatUsd(cashierTotal)}</small></div>`;
+  $("#emptyReport").hidden = Boolean(rows.length || lastReportDonations.length);
+  if ($("#reportSalesTable")) $("#reportSalesTable").hidden = !rows.length;
   $("#reportRows").innerHTML = rows.map(row => `<tr><td>${row.name}</td><td title="${row.contact || ""}">${row.provider || "Pending"}</td><td>${row.quantity}</td><td>${formatLbp(row.price)}</td><td>${row.cost == null ? '<span class="pending-value">Pending</span>' : formatLbp(row.cost)}</td><td>${row.cost == null ? '<span class="pending-value">Pending</span>' : formatLbp(row.price - row.cost)}</td><td>${row.payment == null ? '<span class="pending-value">Pending</span>' : formatLbp(row.payment)}</td><td>${row.profit == null ? '<span class="pending-value">Pending</span>' : formatLbp(row.profit)}</td></tr>`).join("");
-  $("#reportTotals").innerHTML = rows.length ? `<tr><td colspan="2">TOTAL</td><td>${sold}</td><td>—</td><td>—</td><td>—</td><td>${formatLbp(payment)}${pending ? "*" : ""}</td><td>${formatLbp(profit)}${pending ? "*" : ""}</td></tr>` : "";
+  $("#reportTotals").innerHTML = rows.length ? `<tr><td colspan="2">SALES TOTAL</td><td>${sold}</td><td>—</td><td>—</td><td>—</td><td>${formatLbp(payment)}${pending ? "*" : ""}</td><td>${formatLbp(profit)}${pending ? "*" : ""}</td></tr>` : "";
+  if ($("#reportDonations")) renderDonationReport(donationTotal);
   document.querySelectorAll(".sort-button").forEach(button => {
     const active = button.dataset.sort === reportSort.key;
     button.classList.toggle("active", active);
@@ -334,17 +445,43 @@ function renderReport() {
   });
 }
 
+function renderDonationReport(total) {
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone: EVENT_TIME_ZONE, timeStyle: "short" });
+  const rows = lastReportDonations.map(donation => {
+    const row = document.createElement("tr");
+    const cells = [
+      `#${donation.number}`, time.format(new Date(donation.completedAt)),
+      formatReceived(donation.enteredAmount, donation.enteredCurrency), formatLbp(donation.amountLbp)
+    ];
+    cells.forEach(value => {
+      const cell = row.insertCell();
+      cell.textContent = value;
+    });
+    return row;
+  });
+  $("#reportDonationRows").replaceChildren(...rows);
+  $("#reportDonationTotal").textContent = formatLbp(total);
+  $("#reportDonationTable").hidden = !rows.length;
+  $("#emptyDonations").hidden = Boolean(rows.length);
+}
+
 async function openReport() {
   $("#reportModal").hidden = false;
   $("#reportSyncStatus").textContent = cloudEnabled ? "Loading combined report…" : "Local device report";
-  reportSource = sales.filter(sale => sale.eventDay === eventDayFromDate());
+  const day = eventDayFromDate();
+  reportSource = sales.filter(sale => sale.eventDay === day);
+  reportDonations = activitiesOnly ? [] : donations.filter(donation => donation.eventDay === day);
   populateDayFilter("#reportDayFilter", reportSource, selectedSalesDay);
   renderReport();
-  reportSource = await loadCombinedSales();
+  [reportSource, reportDonations] = await Promise.all([
+    loadCombinedSales(),
+    activitiesOnly ? [] : loadCombinedDonations(day)
+  ]);
   populateDayFilter("#reportDayFilter", reportSource, $("#reportDayFilter").value);
   renderReport();
-  const queued = sales.filter(sale => !sale.synced).length;
-  $("#reportSyncStatus").textContent = cloudEnabled ? (queued ? `${queued} sale${queued === 1 ? "" : "s"} waiting to sync` : "All devices synchronized") : "Cloud not configured · local report only";
+  if ($("#reportSyncStatus").textContent !== "Donations shown from this device") {
+    $("#reportSyncStatus").textContent = $("#syncStatus").textContent;
+  }
 }
 function closeReport() { $("#reportModal").hidden = true; }
 
@@ -352,6 +489,13 @@ function exportReport() {
   const heading = ["Sales day", "Item", "Provider", "Contact", "Items sold", "Sale price LBP", "Provider per item LBP", "Profit per item LBP", "Total to provider LBP", "Total profit LBP"];
   const selectedDay = eventDayFromDate();
   const body = sortReportRows(reportData(lastReportSales)).map(row => [selectedDay === "all" ? "All event days" : selectedDay, row.name, row.provider || "Pending", row.contact || "", row.quantity, row.price, row.cost ?? "Pending", row.cost == null ? "Pending" : row.price - row.cost, row.payment ?? "Pending", row.profit ?? "Pending"]);
+  if (!activitiesOnly) {
+    heading.push("Record type", "Donation number", "Amount received", "Currency");
+    body.forEach(row => row.push("Sale", "", "", ""));
+    lastReportDonations.forEach(donation => {
+      body.push([selectedDay, "", "", "", "", "", "", "", "", donation.amountLbp, "Donation", donation.number, donation.enteredAmount, donation.enteredCurrency]);
+    });
+  }
   const csv = [heading, ...body].map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -451,7 +595,7 @@ function setSyncStatus(state, text) {
   $("#syncStatus").textContent = text;
 }
 
-  async function supabaseRequest(path, options = {}) {
+async function supabaseRequest(path, options = {}) {
   const response = await fetch(`${cloud.supabaseUrl.replace(/\/$/, "")}/rest/v1/${path}`, {
     ...options,
     headers: { apikey: cloud.supabaseAnonKey, Authorization: `Bearer ${cloud.supabaseAnonKey}`, "Content-Type": "application/json", ...(options.headers || {}) }
@@ -461,26 +605,82 @@ function setSyncStatus(state, text) {
   return body ? JSON.parse(body) : null;
 }
 
-async function syncPendingSales() {
+function syncPendingSales() {
   if (!cloudEnabled) { setSyncStatus("offline", "Cloud not configured"); return; }
-  if (!navigator.onLine) { setSyncStatus("offline", "Offline · sales queued"); return; }
-  if (syncInProgress) return;
+  if (!navigator.onLine) { setSyncStatus("offline", "Offline · records queued"); return; }
+  if (syncInProgress) return syncInProgress;
   const today = eventDayFromDate();
-  const pending = sales.filter(sale => !sale.synced && sale.eventDay === today);
-  if (!pending.length) { setSyncStatus("", "All sales synced"); return; }
-  syncInProgress = true;
-  setSyncStatus("syncing", `Syncing ${pending.length} sale${pending.length === 1 ? "" : "s"}…`);
+  const pendingSales = sales.filter(sale => !sale.synced && sale.eventDay === today);
+  const pendingDonations = donations.filter(donation => !donation.synced && !donation.deletedAt);
+  const count = pendingSales.length + pendingDonations.length;
+  if (!count) { setSyncStatus("", "All records synced"); return; }
+  setSyncStatus("syncing", `Syncing ${count} record${count === 1 ? "" : "s"}…`);
+  syncInProgress = Promise.allSettled([uploadSales(pendingSales), uploadDonations(pendingDonations)])
+    .then(results => {
+      const failed = results.filter(result => result.status === "rejected");
+      failed.forEach(result => console.warn(result.reason));
+      const stillPending = sales.some(sale => !sale.synced && sale.eventDay === today) ||
+        donations.some(donation => !donation.synced && !donation.deletedAt);
+      if (failed.length || stillPending) setSyncStatus("offline", "Saved locally · sync pending");
+      else setSyncStatus("", "All records synced");
+    })
+    .finally(() => { syncInProgress = null; });
+  return syncInProgress;
+}
+
+async function uploadSales(pending) {
+  if (!pending.length) return;
+  const payload = pending.map(sale => ({ id: sale.id, terminal_id: sale.terminalId || terminalId, local_order_number: sale.localOrderNumber || sale.orderNumber, event_day: sale.eventDay, completed_at: sale.completedAt, items: sale.items, deleted_at: sale.deletedAt || null }));
+  await supabaseRequest("sales_orders?on_conflict=id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(payload) });
+  const sent = new Set(pending);
+  sales = sales.map(sale => sent.has(sale) ? { ...sale, synced: true } : sale);
+  localStorage.setItem("kermessSales", JSON.stringify(sales));
+}
+
+async function uploadDonations(pending) {
+  if (!pending.length) return;
+  const payload = pending.map(donation => ({
+    id: donation.id, donation_number: donation.number, terminal_id: donation.terminalId,
+    local_number: donation.localNumber, event_day: donation.eventDay, received_at: donation.completedAt,
+    amount_received: donation.enteredAmount, currency: donation.enteredCurrency, amount_lbp: donation.amountLbp
+  }));
+  await supabaseRequest("donations?on_conflict=id", {
+    method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify(payload)
+  });
+  const sent = new Set(pending);
+  donations = donations.map(donation => sent.has(donation) ? { ...donation, synced: true } : donation);
+  localStorage.setItem("kermessDonations", JSON.stringify(donations));
+}
+
+async function loadCombinedDonations(day) {
+  const local = () => donations.filter(donation => donation.eventDay === day);
+  if (!cloudEnabled || !navigator.onLine) return local();
+  await syncPendingSales();
   try {
-    const payload = pending.map(sale => ({ id: sale.id, terminal_id: sale.terminalId || terminalId, local_order_number: sale.localOrderNumber || sale.orderNumber, event_day: sale.eventDay, completed_at: sale.completedAt, items: sale.items, deleted_at: sale.deletedAt || null }));
-    await supabaseRequest("sales_orders?on_conflict=id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(payload) });
-    const ids = new Set(pending.map(sale => sale.id));
-    sales = sales.map(sale => ids.has(sale.id) ? { ...sale, synced: true } : sale);
-    localStorage.setItem("kermessSales", JSON.stringify(sales));
-    setSyncStatus("", "All sales synced");
+    const combined = new Map();
+    const pageSize = 1000;
+    const columns = "id,donation_number,terminal_id,local_number,event_day,received_at,amount_received,currency,amount_lbp,deleted_at";
+    for (let offset = 0; ; offset += pageSize) {
+      const page = await supabaseRequest(`donations?select=${columns}&event_day=eq.${encodeURIComponent(day)}&order=received_at.asc,id.asc&limit=${pageSize}&offset=${offset}`);
+      page.forEach(row => combined.set(row.id, {
+        id: row.id, number: row.donation_number, terminalId: row.terminal_id, localNumber: row.local_number,
+        eventDay: row.event_day, completedAt: row.received_at, enteredAmount: Number(row.amount_received),
+        enteredCurrency: row.currency, amountLbp: Number(row.amount_lbp), deletedAt: row.deleted_at, synced: true
+      }));
+      if (page.length < pageSize) break;
+    }
+    const refreshed = donations.map(donation => combined.get(donation.id) || donation);
+    localStorage.setItem("kermessDonations", JSON.stringify(refreshed));
+    donations = refreshed;
+    local().forEach(donation => {
+      if (!donation.synced && !combined.has(donation.id)) combined.set(donation.id, donation);
+    });
+    return [...combined.values()];
   } catch (error) {
-    setSyncStatus("offline", "Saved offline · sync pending");
     console.warn(error);
-  } finally { syncInProgress = false; }
+    $("#reportSyncStatus").textContent = "Donations shown from this device";
+    return local();
+  }
 }
 
 async function loadCombinedSales() {
@@ -497,9 +697,11 @@ async function loadCombinedSales() {
       if (page.length < pageSize) break;
     }
     const serverSales = remote.map(row => ({ id: row.id, orderNumber: row.order_number, localOrderNumber: row.local_order_number, terminalId: row.terminal_id, eventDay: row.event_day || eventDayFromDate(row.completed_at), completedAt: row.completed_at, items: row.items, deletedAt: row.deleted_at || null, synced: true }));
-    const pending = sales.filter(sale => !sale.synced && todaySales(sale));
-    const pendingIds = new Set(pending.map(sale => sale.id));
-    return [...serverSales.filter(todaySales).filter(sale => !pendingIds.has(sale.id)), ...pending];
+    const combined = new Map(serverSales.filter(todaySales).map(sale => [sale.id, sale]));
+    sales.filter(todaySales).forEach(sale => {
+      if (!sale.synced) combined.set(sale.id, sale);
+    });
+    return [...combined.values()];
   } catch (error) {
     console.warn(error);
     return sales.filter(todaySales);
@@ -508,7 +710,7 @@ async function loadCombinedSales() {
 
 function updateConnectionStatus() {
   if (!cloudEnabled) setSyncStatus("offline", "Cloud not configured");
-  else if (!navigator.onLine) setSyncStatus("offline", "Offline · sales queued");
+  else if (!navigator.onLine) setSyncStatus("offline", "Offline · records queued");
   else syncPendingSales();
 }
 
@@ -528,6 +730,13 @@ $("#cartItems").addEventListener("click", event => {
   const button = event.target.closest("[data-action]");
   if (button) changeQuantity(button.dataset.id, button.dataset.action === "increase" ? 1 : -1);
 });
+if ($("#donationDialog")) {
+  $("#openDonation").addEventListener("click", openDonation);
+  $("#checkoutDonation").addEventListener("click", openDonation);
+  $("#closeDonation").addEventListener("click", () => $("#donationDialog").close());
+  $("#donationAmount").addEventListener("input", updateDonationAmount);
+  $("#donationForm").addEventListener("submit", recordDonation);
+}
 $("#searchInput").addEventListener("input", renderProducts);
 $("#salesDay").addEventListener("change", event => {
   if (!event.target.value) { updateSalesDayControl(); return; }
@@ -545,7 +754,7 @@ $("#useTodayButton").addEventListener("click", () => {
 $("#clearOrder").addEventListener("click", clearOrCancelOrder);
 $("#completeSale").addEventListener("click", showCompletedSale);
 $("#closeModal").addEventListener("click", closeSale);
-$(".modal-backdrop").addEventListener("click", closeSale);
+$("#saleModal .modal-backdrop").addEventListener("click", closeSale);
 $("#newOrder").addEventListener("click", startNewOrder);
 $("#paymentAmount").addEventListener("input", formatPaymentAmount);
 $("#paymentAmount").addEventListener("keydown", event => { if (event.key === "Enter" && !$("#newOrder").disabled) startNewOrder(); });
@@ -577,6 +786,7 @@ $("#invoiceList").addEventListener("click", event => {
   else if (restoreButton) restoreInvoice(restoreButton.dataset.restoreInvoice);
 });
 document.addEventListener("keydown", event => {
+  if ($("#donationDialog")?.open) return;
   if (event.key === "/" && document.activeElement !== $("#searchInput")) { event.preventDefault(); $("#searchInput").focus(); }
   if (event.key === "Escape") { closeSale(); closeReport(); closeInvoices(); }
 });
@@ -599,5 +809,5 @@ window.addEventListener("offline", updateConnectionStatus);
 updateConnectionStatus();
 setInterval(syncPendingSales, 15000);
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  navigator.serviceWorker.register("./sw.js?v=25", { updateViaCache: "none" }).catch(error => console.warn("Offline cache unavailable", error));
+  navigator.serviceWorker.register("./sw.js?v=30", { updateViaCache: "none" }).catch(error => console.warn("Offline cache unavailable", error));
 }

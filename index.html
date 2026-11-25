@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=24" />
+  <link rel="stylesheet" href="styles.css?v=29" />
 </head>
 <body>
   <main class="app-shell">
@@ -43,6 +43,11 @@
         </div>
 
         <nav id="categoryTabs" class="category-tabs" aria-label="Menu categories"></nav>
+        <section class="donation-section" aria-labelledby="donationTitle">
+          <div class="donation-icon" aria-hidden="true">♥</div>
+          <h2 id="donationTitle">Donations</h2>
+          <button id="openDonation" class="complete-button" type="button">Record donation</button>
+        </section>
         <p id="resultCount" class="result-count"></p>
         <div id="productGrid" class="product-grid"></div>
         <div id="emptyProducts" class="empty-state" hidden>
@@ -135,8 +140,27 @@
       <div class="modal-actions">
         <button id="newOrder" class="complete-button" type="button" disabled>Confirm sale &amp; new order</button>
       </div>
+      <button id="checkoutDonation" class="secondary-button checkout-donation" type="button">Record donation</button>
     </section>
   </div>
+
+  <dialog id="donationDialog" class="modal-card donation-dialog" aria-labelledby="donationDialogTitle">
+    <button id="closeDonation" class="modal-close" type="button" aria-label="Close donation">×</button>
+    <h2 id="donationDialogTitle">Record donation</h2>
+    <form id="donationForm">
+      <label class="payment-field">
+        <span>Donation received</span>
+        <div class="payment-input-wrap">
+          <input id="donationAmount" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 5 or 100,000" aria-describedby="donationHint" autofocus />
+          <strong id="donationCurrency">—</strong>
+        </div>
+      </label>
+      <p id="donationHint" class="payment-hint">Up to 3 digits = USD · 4+ digits = LBP</p>
+      <p id="donationValue" class="donation-value" aria-live="polite"></p>
+      <button id="saveDonation" class="complete-button" type="submit" disabled>Save donation</button>
+      <p id="donationStatus" class="donation-status" role="status"></p>
+    </form>
+  </dialog>
 
   <div id="reportModal" class="modal report-modal" hidden>
     <div class="modal-backdrop"></div>
@@ -151,11 +175,19 @@
       <div class="report-toolbar"><label>Show sales from <select id="reportDayFilter"></select></label></div>
       <div id="reportStats" class="report-stats"></div>
       <div class="report-table-wrap">
-        <table class="report-table">
+        <table id="reportSalesTable" class="report-table">
           <thead><tr><th><button class="sort-button" data-sort="name" type="button">Item</button></th><th><button class="sort-button" data-sort="provider" type="button">Provider</button></th><th><button class="sort-button" data-sort="quantity" type="button">Sold</button></th><th><button class="sort-button" data-sort="price" type="button">Sale price</button></th><th><button class="sort-button" data-sort="cost" type="button">Provider/item</button></th><th><button class="sort-button" data-sort="profitPerItem" type="button">Profit/item</button></th><th><button class="sort-button" data-sort="payment" type="button">Total to provider</button></th><th><button class="sort-button" data-sort="profit" type="button">Total profit</button></th></tr></thead>
           <tbody id="reportRows"></tbody><tfoot id="reportTotals"></tfoot>
         </table>
         <div id="emptyReport" class="empty-state" hidden><span>▤</span><h2>No completed sales yet</h2><p>Completed orders will appear here.</p></div>
+        <section id="reportDonations" class="report-donations" aria-labelledby="reportDonationsTitle">
+          <header><h3 id="reportDonationsTitle">Donations</h3><p>Total donations <strong id="reportDonationTotal"></strong></p></header>
+          <p id="emptyDonations" class="report-timestamp">No donations recorded for this sales day.</p>
+          <table id="reportDonationTable" class="report-table" hidden>
+            <thead><tr><th>Donation number</th><th>Time</th><th>Amount received</th><th>Profit (LBP)</th></tr></thead>
+            <tbody id="reportDonationRows"></tbody>
+          </table>
+        </section>
       </div>
       <footer class="report-footer">
         <p><span class="pending-dot"></span> Pending means the provider percentage has not been entered yet.</p>
@@ -182,6 +214,6 @@
   </div>
 
   <script src="config.js"></script>
-  <script src="app.js?v=26"></script>
+  <script src="app.js?v=30"></script>
 </body>
 </html>

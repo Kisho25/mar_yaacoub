@@ -11,7 +11,9 @@ This connects spreadsheet `1hyHAxrLELHvrinB6Ao_UHGSytGLjcE5T1xMZZQCxePQ` to the 
 7. Select `saveSupabaseSettings` in the function menu and click **Run**. Approve Google's permissions.
 8. Select `setupKermessSync` and click **Run** once.
 
-The script creates **Sales Log**, **Item Report**, and **All Days Report** tabs and refreshes them from Supabase approximately every minute. **Sales Log** includes the event day for every invoice, **Item Report** keeps daily totals separated, and **All Days Report** combines the full event. It rebuilds the tabs from sale UUIDs, so synchronization retries cannot duplicate data.
+The script refreshes the tabs from Supabase approximately every minute. **Sales Log** lists invoice items, and **Donations Log** lists each donation number, the original amount and currency, and the profit in LBP. **Item Report** and **All Days Report** include a donations total in the profit column. Synchronization retries use the same record ID.
+
+If sync is already set up, create the `donations` table using [supabase-donations-migration.sql](supabase-donations-migration.sql), then replace the Apps Script with the updated file and save it. The existing trigger will use the updated script.
 
 To download a computer copy, open the Google Sheet and choose **File → Download → Microsoft Excel (.xlsx)** or **Comma-separated values (.csv)**.
 

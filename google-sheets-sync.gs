@@ -34,7 +34,8 @@ const PRODUCTS = {
   35:['Mini Games',15000,'Play Aura','70 938 434'],
   36:['Box · per hit',35000,'Play Aura','70 938 434'],
   37:['VR',360000,'Jack Chewan','70 161 814'],
-  38:['Gonflable Offre',0,'AC Inflatables','']
+  38:['Gonflable Offre',0,'AC Inflatables',''],
+  101:['Cakes Fersen',0,'Fersen','']
 };
 
 /** Paste the same sb_publishable_ key used in config.js, then run this once. */
@@ -53,19 +54,29 @@ function setupKermessSync() {
   syncKermessSales();
 }
 
-/** Downloads all Supabase orders and safely rebuilds both sheets without duplicates. */
+/** Downloads the two ledgers before rebuilding the report sheets. */
 function syncKermessSales() {
   const key = PropertiesService.getScriptProperties().getProperty('SUPABASE_PUBLISHABLE_KEY');
   if (!key) throw new Error('Run saveSupabaseSettings() first.');
 
-  const orders = fetchAllOrders_(key);
+  const orders = fetchAllRows_('sales_orders', 'id,order_number,local_order_number,terminal_id,event_day,completed_at,items,deleted_at', 'completed_at', key);
+  const donations = fetchAllRows_('donations', 'id,donation_number,event_day,received_at,amount_received,currency,amount_lbp,deleted_at', 'received_at', key);
   const rawRows = [];
+  const donationRows = [];
+  const donationsByDay = {};
   const dailyTotals = {};
   const allTotals = {};
 
+  donations.filter(donation => !donation.deleted_at).forEach(donation => {
+    const day = donation.event_day;
+    const amountLbp = Number(donation.amount_lbp);
+    donationRows.push([day, donation.donation_number, new Date(donation.received_at), Number(donation.amount_received), donation.currency, amountLbp]);
+    donationsByDay[day] = (donationsByDay[day] || 0) + amountLbp;
+  });
+
   orders.filter(order => !order.deleted_at).forEach(order => {
     const eventDay = order.event_day || Utilities.formatDate(new Date(order.completed_at), 'Asia/Beirut', 'yyyy-MM-dd');
-    (order.items || []).forEach(item => {
+    (order.items || []).filter(item => item.kind !== 'donation' && Number(item.id) !== 102).forEach(item => {
       const product = PRODUCTS[item.id] || [`Item ${item.id}`,null,'Pending',''];
       const quantity = Number(item.quantity) || 0;
       const price = Number(item.price) || 0;
@@ -77,15 +88,24 @@ function syncKermessSales() {
   });
 
   const dailyReportRows = [];
-  Object.keys(dailyTotals).sort().forEach(day => {
-    buildReportRows_(dailyTotals[day]).forEach(row => dailyReportRows.push([day].concat(row)));
+  const eventDays = new Set([...Object.keys(dailyTotals), ...Object.keys(donationsByDay)]);
+  [...eventDays].sort().forEach(day => {
+    buildReportRows_(dailyTotals[day] || {}).forEach(row => dailyReportRows.push([day].concat(row)));
+    if (donationsByDay[day]) dailyReportRows.push([day].concat(donationTotalRow_(donationsByDay[day])));
   });
   const allReportRows = buildReportRows_(allTotals);
+  const donationTotal = Object.values(donationsByDay).reduce((sum, amount) => sum + amount, 0);
+  if (donationTotal) allReportRows.push(donationTotalRow_(donationTotal));
 
   writeSheet_('Sales Log', ['Sales Day','Global Order','Local Order','Completed At','Terminal ID','Sale UUID','Item','Quantity','Sale Price LBP'], rawRows, [9]);
+  writeSheet_('Donations Log', ['Sales Day','Donation Number','Recorded At','Amount Received','Currency','Profit LBP'], donationRows, [6]);
   writeSheet_('Item Report', ['Sales Day','Item','Provider','Contact','Items Sold','Sale Price LBP','Provider / Item LBP','Profit / Item LBP','Total to Provider LBP','Total Profit LBP'], dailyReportRows, [6,7,8,9,10]);
   writeSheet_('All Days Report', ['Item','Provider','Contact','Items Sold','Sale Price LBP','Provider / Item LBP','Profit / Item LBP','Total to Provider LBP','Total Profit LBP'], allReportRows, [5,6,7,8,9]);
   PropertiesService.getScriptProperties().setProperty('LAST_SUCCESSFUL_SYNC', new Date().toISOString());
+}
+
+function donationTotalRow_(amountLbp) {
+  return ['Donations (total)', '', '', '', '', '', '', 0, amountLbp];
 }
 
 function addToTotals_(totals, id, quantity, price) {
@@ -99,18 +119,19 @@ function buildReportRows_(totals) {
   return Object.keys(totals).sort((a,b) => Number(a)-Number(b)).map(id => {
     const product = PRODUCTS[id] || [`Item ${id}`,null,'Pending',''];
     const total = totals[id];
+    const unitPrice = total.latestPrice;
     const providerPayment = product[1] === null ? 'Pending' : product[1] * total.quantity;
     const profit = product[1] === null ? 'Pending' : total.revenue - providerPayment;
-    const profitPerItem = product[1] === null ? 'Pending' : total.latestPrice - product[1];
-    return [product[0], product[2], product[3], total.quantity, total.latestPrice, product[1] === null ? 'Pending' : product[1], profitPerItem, providerPayment, profit];
+    const profitPerItem = product[1] === null ? 'Pending' : unitPrice - product[1];
+    return [product[0], product[2], product[3], total.quantity, unitPrice, product[1] === null ? 'Pending' : product[1], profitPerItem, providerPayment, profit];
   });
 }
 
-function fetchAllOrders_(key) {
+function fetchAllRows_(table, columns, timeColumn, key) {
   const all = [];
   const pageSize = 1000;
   for (let offset = 0; ; offset += pageSize) {
-    const url = `${SUPABASE_URL}/rest/v1/sales_orders?select=id,order_number,local_order_number,terminal_id,event_day,completed_at,items,deleted_at&order=completed_at.asc&limit=${pageSize}&offset=${offset}`;
+    const url = `${SUPABASE_URL}/rest/v1/${table}?select=${columns}&order=${timeColumn}.asc,id.asc&limit=${pageSize}&offset=${offset}`;
     const response = UrlFetchApp.fetch(url, { headers:{ apikey:key, Authorization:`Bearer ${key}` }, muteHttpExceptions:true });
     if (response.getResponseCode() !== 200) throw new Error(`Supabase returned ${response.getResponseCode()}: ${response.getContentText()}`);
     const page = JSON.parse(response.getContentText());

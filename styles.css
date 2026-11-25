@@ -92,6 +92,14 @@ kbd { border: 1px solid var(--line); border-radius: 5px; background: #f7f4ee; co
 }
 .category-button:hover { border-color: #bdc8c2; color: var(--ink); }
 .category-button.active { background: var(--green); border-color: var(--green); color: white; }
+.donation-section {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 0 0 24px; padding: 14px; border: 1px solid #cfe0d7; border-radius: 18px;
+  background: linear-gradient(135deg, #f4faf7, #fffdf9); box-shadow: 0 8px 24px rgba(23,79,58,.05);
+}
+.donation-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: var(--mint); color: var(--green); font-size: 20px; }
+.donation-section h2 { flex: 1; margin: 0; font-size: 18px; letter-spacing: -.03em; }
+.donation-section .complete-button { width: auto; height: 42px; padding: 0 13px; font-size: 12px; white-space: nowrap; }
 .result-count { margin: 0 0 13px; color: var(--muted); font-size: 12px; }
 
 .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 13px; }
@@ -188,6 +196,15 @@ kbd { border: 1px solid var(--line); border-radius: 5px; background: #f7f4ee; co
 .payment-input-wrap input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 17px; font-weight: 700; }
 .payment-input-wrap strong { min-width: 40px; padding: 5px 8px; border-radius: 7px; background: #f1eee7; color: var(--green); text-align: center; font-size: 11px; }
 .payment-hint { margin: 7px 0 14px; color: #9a9f9b; text-align: left; font-size: 10px; }
+.checkout-donation { margin-top: 8px; }
+#saleModal .modal-card { max-height: calc(100dvh - 40px); overflow-y: auto; }
+.donation-dialog { position: fixed; inset: 0; height: fit-content; width: min(430px, calc(100% - 32px)); max-height: calc(100% - 32px); border: 0; color: var(--ink); }
+.donation-dialog::backdrop { background: rgba(17,29,24,.55); }
+.donation-dialog form { margin-top: 22px; }
+.donation-value, .donation-status { color: var(--green); font-size: 12px; font-weight: 700; }
+.donation-value { text-align: left; }
+.donation-status { margin: 10px 0 0; overflow-wrap: anywhere; }
+.donation-value:empty, .donation-status:empty { display: none; }
 .change-result { margin: 0 0 16px; padding: 18px 20px; border-radius: 13px; background: var(--mint); text-align: left; }
 .change-result span { display: block; margin-bottom: 7px; color: var(--muted); font-size: 11px; font-weight: 700; }
 .change-result strong,
@@ -218,6 +235,11 @@ kbd { border: 1px solid var(--line); border-radius: 5px; background: #f7f4ee; co
 .stat-card.cashier strong { color: white; }
 .stat-card.cashier small { display: block; margin-top: 4px; font-size: 10px; }
 .report-table-wrap { flex: 1; overflow: auto; padding: 0 28px; }
+.report-donations { margin: 14px 0; padding: 12px 0; border-top: 1px solid var(--line); }
+.report-donations header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.report-donations h3, .report-donations header p { margin: 0 0 8px; }
+.report-donations header p { color: var(--green); font-size: 12px; }
+.report-donations .report-table th { position: static; }
 .report-table { width: 100%; border-collapse: collapse; white-space: nowrap; }
 .report-table th { position: sticky; top: 0; z-index: 1; padding: 13px 10px; background: var(--surface); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 10px; text-align: right; text-transform: uppercase; letter-spacing: .06em; }
 .sort-button { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; white-space: nowrap; }
@@ -309,7 +331,7 @@ kbd { border: 1px solid var(--line); border-radius: 5px; background: #f7f4ee; co
 
 @media print {
   body { background: white; }
-  .catalog-panel, .order-panel, .saleModal { display: none !important; }
+  .catalog-panel, .order-panel, .saleModal, .donation-dialog { display: none !important; }
   .app-shell { display: block; }
   .report-modal { position: static; display: block; padding: 0; }
   .report-modal .modal-backdrop, .report-header-actions, .report-footer { display: none; }
