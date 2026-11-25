@@ -2,86 +2,40 @@ const EXCHANGE_RATE = 90000;
 const activitiesOnly = Boolean(window.KERMESS_ACTIVITIES_ONLY) || /\/games(?:\/index\.html)?\/?$/.test(window.location.pathname);
 
 const products = [
-  { id: 1, name: "Shawarma Lahme", price: 600000, category: "Food", icon: "🥙" },
-  { id: 2, name: "Tawouk", price: 500000, category: "Food", icon: "🍢" },
-  { id: 3, name: "Kafta", price: 550000, category: "Food", icon: "🥩" },
-  { id: 4, name: "Lahme Khanzir", price: 600000, category: "Food", icon: "🍖" },
-  { id: 5, name: "Frisco Tropical", price: 200000, category: "Drinks", icon: "🥪" },
-  { id: 6, name: "Zaatar", price: 50000, category: "Food", icon: "🫓" },
-  { id: 7, name: "Jebne", price: 200000, category: "Food", icon: "🧀" },
-  { id: 8, name: "Keshk", price: 200000, category: "Food", icon: "🥣" },
-  { id: 9, name: "Nutella", price: 400000, category: "Sweets", icon: "🍫" },
-  { id: 10, name: "Nutella Banana", price: 450000, category: "Sweets", icon: "🍌" },
-  { id: 11, name: "Nutella Kinder", price: 500000, category: "Sweets", icon: "🍫" },
-  { id: 12, name: "Nutella Oreo", price: 500000, category: "Sweets", icon: "🍪" },
-  { id: 13, name: "Nutella Banana Nuts", price: 500000, category: "Sweets", icon: "🥜" },
-  { id: 14, name: "Nutella Lotus", price: 500000, category: "Sweets", icon: "🧇" },
-  { id: 15, name: "Nutella Kinder Oreo", price: 700000, category: "Sweets", icon: "🍫" },
-  { id: 16, name: "Brownies", price: 450000, category: "Sweets", icon: "🟫" },
-  { id: 17, name: "Merry Cream", price: 200000, category: "Sweets", icon: "🍦" },
-  { id: 18, name: "Limonade", price: 200000, category: "Drinks", icon: "🍋" },
-  { id: 19, name: "Soft Drink", price: 50000, category: "Drinks", icon: "🥤" },
-  { id: 20, name: "Water Small", price: 10000, category: "Drinks", icon: "💧" },
-  { id: 21, name: "Ice Tea", price: 60000, category: "Drinks", icon: "🧋" },
-  { id: 22, name: "Beer", price: 75000, category: "Drinks", icon: "🍺" },
-  { id: 23, name: "Beer Rosée", price: 75000, category: "Drinks", icon: "🍻" },
-  { id: 24, name: "Carbonated Beer", price: 50000, category: "Drinks", icon: "🥂" },
-  { id: 25, name: "XXL", price: 195000, category: "Drinks", icon: "⚡" },
-  { id: 26, name: "Arguile", price: 500000, category: "Snacks", icon: "💨" },
-  { id: 27, name: "Cotton Candy", price: 100000, category: "Sweets", icon: "🍭" },
-  { id: 28, name: "Bzourat", price: 25000, category: "Snacks", icon: "🌻" },
-  { id: 29, name: "Popcorn Wasat", price: 100000, category: "Snacks", icon: "🍿" },
-  { id: 30, name: "Popcorn Kbir", price: 200000, category: "Snacks", icon: "🍿" },
-  { id: 31, name: "Gonflables", price: 300000, category: "Activities", icon: "🏰" },
-  { id: 32, name: "Trampoline", price: 200000, category: "Activities", icon: "🤸" },
-  { id: 33, name: "Play Station · 15 min", price: 450000, category: "Activities", icon: "🎮" },
-  { id: 34, name: "Face Painting", price: 50000, category: "Activities", icon: "🎨" },
-  { id: 35, name: "Bon Jeu", price: 50000, category: "Activities", icon: "🎯" },
-  { id: 36, name: "Box · per hit", price: 50000, category: "Activities", icon: "🥊" },
-  { id: 37, name: "VR", price: 500000, category: "Activities", icon: "🥽" },
-  { id: 38, name: "Gonflable Offre", price: 500000, category: "Activities", icon: "🏰" }
+  { id: 1, name: "Kaak Plain", price: 150000, category: "Food", icon: "🫓" },
+  { id: 2, name: "Kaak Picon", price: 250000, category: "Food", icon: "🧀" },
+  { id: 3, name: "Kaak Jebne", price: 350000, category: "Food", icon: "🧀" },
+  { id: 4, name: "Kaak Jebne & Jambon", price: 450000, category: "Food", icon: "🥪" },
+  { id: 5, name: "Kaak Nutella", price: 350000, category: "Food", icon: "🍫" },
+  { id: 6, name: "+ Add Banana", price: 50000, category: "Food", icon: "🍌" },
+  { id: 7, name: "Bonjus", price: 50000, category: "Drinks", icon: "🧃" },
+  { id: 8, name: "Water 0.5L", price: 50000, category: "Drinks", icon: "💧" },
+  { id: 9, name: "Lipton Tea", price: 100000, category: "Drinks", icon: "🍵" },
+  { id: 10, name: "Lipton Green Tea", price: 100000, category: "Drinks", icon: "🍵" },
+  { id: 11, name: "Nescafé 3 in 1", price: 100000, category: "Drinks", icon: "☕" },
+  { id: 12, name: "Nescafé 2 in 1", price: 100000, category: "Drinks", icon: "☕" },
+  { id: 13, name: "Black Coffee", price: 100000, category: "Drinks", icon: "☕" },
+  { id: 14, name: "Cappuccino", price: 100000, category: "Drinks", icon: "☕" },
+  { id: 15, name: "Hot Chocolate", price: 100000, category: "Drinks", icon: "🍫" }
 ];
 
 // [Kermess sale price, provider/person price, provider, contact]
 const foodFinancials = {
-  1: [800000, 600000, "Michel Rahmeh", "03 922 561"],
-  2: [650000, 500000, "Michel Rahmeh", "03 922 561"],
-  3: [700000, 550000, "Michel Rahmeh", "03 922 561"],
-  4: [800000, 600000, "Michel Rahmeh", "03 922 561"],
-  5: [300000, 200000, "Elie Lteif (Frisco)", "03 502 849"],
-  6: [100000, 50000, "Saj Akhawiye", "71 760 741 (Samia Lteif)"],
-  7: [250000, 200000, "Saj Akhawiye", "71 760 741 (Samia Lteif)"],
-  8: [250000, 200000, "Saj Akhawiye", "71 760 741 (Samia Lteif)"],
-  9: [500000, 400000, "Crepetna", "76 656 367"],
-  10: [550000, 450000, "Crepetna", "76 656 367"],
-  11: [600000, 500000, "Crepetna", "76 656 367"],
-  12: [600000, 500000, "Crepetna", "76 656 367"],
-  13: [600000, 500000, "Crepetna", "76 656 367"],
-  14: [650000, 550000, "Crepetna", "76 656 367"],
-  15: [700000, 600000, "Crepetna", "76 656 367"],
-  16: [500000, 450000, "Orianne", "79 306 256"],
-  17: [300000, 200000, "Marcelino Mikhael", "71 540 832"],
-  18: [300000, 200000, "Elie Lteif (Frisco)", "03 502 849"],
-  19: [100000, 0, "Akhawiyat", "03 773 860"],
-  20: [50000, 0, "Akhawiyat", "03 773 860"],
-  21: [150000, 0, "Akhawiyat", "03 773 860"],
-  22: [300000, 0, "Akhawiyat", "03 773 860"],
-  23: [350000, 0, "Akhawiyat", "03 773 860"],
-  24: [350000, 0, "Akhawiyat", "03 773 860"],
-  25: [300000, 0, "Akhawiyat", "03 773 860"],
-  26: [800000, 500000, "Hammoura", "81 067 970"],
-  27: [200000, 100000, "Joceline", "03 773 860"],
-  28: [50000, 0, "Akhawiyat", "03 773 860"],
-  29: [200000, 100000, "Chady Azar", "70 895 345"],
-  30: [300000, 200000, "Chady Azar", "70 895 345"],
-  31: [300000, 0, "AC Inflatables", ""],
-  32: [200000, 0, "Sahel Alma", ""],
-  33: [450000, 0, "Anthony Chidiac", "81 030 873"],
-  34: [50000, 0, "Akhawiyat", "03 773 860"],
-  35: [50000, 15000, "Play Aura", "70 938 434"],
-  36: [50000, 35000, "Play Aura", "70 938 434"],
-  37: [500000, 360000, "Jack Chewan", "70 161 814"],
-  38: [500000, 0, "AC Inflatables", ""]
+  1: [150000, 65000, "Kaak menu cost", ""],
+  2: [250000, 105500, "Kaak menu cost", ""],
+  3: [350000, 130500, "Kaak menu cost", ""],
+  4: [450000, 190500, "Kaak menu cost", ""],
+  5: [350000, 134200, "Kaak menu cost", ""],
+  6: [50000, 16500, "Kaak menu cost", ""],
+  7: [50000, 15000, "Kaak menu cost", ""],
+  8: [50000, 18300, "Kaak menu cost", ""],
+  9: [100000, 8700, "Kaak menu cost", ""],
+  10: [100000, 11900, "Kaak menu cost", ""],
+  11: [100000, 23800, "Kaak menu cost", ""],
+  12: [100000, 29700, "Kaak menu cost", ""],
+  13: [100000, 20300, "Kaak menu cost", ""],
+  14: [100000, 29600, "Kaak menu cost", ""],
+  15: [100000, 34600, "Kaak menu cost", ""]
 };
 
 products.forEach(product => {
@@ -94,7 +48,7 @@ products.forEach(product => {
 });
 
 const accents = { Food: "#f7dfcb", Sweets: "#f2dce5", Drinks: "#dcecf2", Snacks: "#eee4ca", Activities: "#dce9df" };
-const categories = activitiesOnly ? [] : ["All", "Food", "Sweets", "Drinks", "Snacks"];
+const categories = activitiesOnly ? [] : ["All", "Food", "Drinks"];
 let activeCategory = activitiesOnly ? "Activities" : "All";
 let cart = {};
 let completedCart = null;
@@ -132,7 +86,7 @@ function formatEventDay(day) {
   if (!day) return "Unknown day";
   return new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`));
 }
-let selectedSalesDay = localStorage.getItem("kermessSalesDay") || eventDayFromDate();
+let selectedSalesDay = eventDayFromDate();
 localStorage.setItem("kermessSalesDay", selectedSalesDay);
 
 // Upgrade sales created by earlier versions so they can safely synchronize once.
@@ -145,10 +99,9 @@ const formatUsd = (amount) => new Intl.NumberFormat("en-US", { style: "currency"
 
 function populateDayFilter(selector, source, preferred = selectedSalesDay) {
   const select = $(selector);
-  const days = [...new Set(source.map(sale => sale.eventDay).filter(Boolean))].sort().reverse();
-  if (preferred !== "all" && preferred && !days.includes(preferred)) days.unshift(preferred);
-  select.innerHTML = `<option value="all">All event days</option>${days.map(day => `<option value="${day}">${formatEventDay(day)}</option>`).join("")}`;
-  select.value = preferred === "all" || days.includes(preferred) ? preferred : "all";
+  const today = eventDayFromDate();
+  select.innerHTML = `<option value="${today}">${formatEventDay(today)}</option>`;
+  select.value = today;
 }
 
 function closeDayWarning() { $("#dayWarningModal").hidden = true; }
@@ -161,10 +114,11 @@ function showDayWarning() {
 
 function updateSalesDayControl(showWarning = false) {
   const input = $("#salesDay");
+  selectedSalesDay = eventDayFromDate();
+  localStorage.setItem("kermessSalesDay", selectedSalesDay);
   input.value = selectedSalesDay;
-  const differsFromToday = selectedSalesDay !== eventDayFromDate();
-  input.title = differsFromToday ? `Orders will be saved under ${formatEventDay(selectedSalesDay)}, not today.` : `Orders will be saved under ${formatEventDay(selectedSalesDay)}.`;
-  if (showWarning && differsFromToday) showDayWarning();
+  input.disabled = true;
+  input.title = `Orders are saved under ${formatEventDay(selectedSalesDay)}.`;
 }
 
 function renderTabs() {
@@ -177,7 +131,7 @@ function filteredProducts() {
   const term = $("#searchInput").value.trim().toLowerCase();
   return products.filter(item => {
     const belongsToPage = activitiesOnly ? item.category === "Activities" : item.category !== "Activities";
-    return belongsToPage && (activeCategory === "All" || item.category === activeCategory) && item.name.toLowerCase().includes(term);
+    return item.active !== false && belongsToPage && (activeCategory === "All" || item.category === activeCategory) && item.name.toLowerCase().includes(term);
   });
 }
 
@@ -354,10 +308,10 @@ function sortReportRows(rows) {
 }
 
 function renderReport() {
-  const day = $("#reportDayFilter").value || selectedSalesDay;
+  const day = eventDayFromDate();
   const relevantSales = reportSource
     .filter(sale => !sale.deletedAt)
-    .filter(sale => day === "all" || sale.eventDay === day)
+    .filter(sale => sale.eventDay === day)
     .map(sale => ({ ...sale, items: sale.items.filter(item => productBelongsToPage(item.id)) }))
     .filter(sale => sale.items.length);
   lastReportSales = relevantSales;
@@ -383,7 +337,7 @@ function renderReport() {
 async function openReport() {
   $("#reportModal").hidden = false;
   $("#reportSyncStatus").textContent = cloudEnabled ? "Loading combined report…" : "Local device report";
-  reportSource = sales;
+  reportSource = sales.filter(sale => sale.eventDay === eventDayFromDate());
   populateDayFilter("#reportDayFilter", reportSource, selectedSalesDay);
   renderReport();
   reportSource = await loadCombinedSales();
@@ -396,7 +350,7 @@ function closeReport() { $("#reportModal").hidden = true; }
 
 function exportReport() {
   const heading = ["Sales day", "Item", "Provider", "Contact", "Items sold", "Sale price LBP", "Provider per item LBP", "Profit per item LBP", "Total to provider LBP", "Total profit LBP"];
-  const selectedDay = $("#reportDayFilter").value;
+  const selectedDay = eventDayFromDate();
   const body = sortReportRows(reportData(lastReportSales)).map(row => [selectedDay === "all" ? "All event days" : selectedDay, row.name, row.provider || "Pending", row.contact || "", row.quantity, row.price, row.cost ?? "Pending", row.cost == null ? "Pending" : row.price - row.cost, row.payment ?? "Pending", row.profit ?? "Pending"]);
   const csv = [heading, ...body].map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
   const link = document.createElement("a");
@@ -408,13 +362,13 @@ function exportReport() {
 
 function renderInvoices() {
   const term = $("#invoiceSearch").value.trim().toLowerCase();
-  const day = $("#invoiceDayFilter").value || selectedSalesDay;
+  const day = eventDayFromDate();
   const status = $("#invoiceStatusFilter").value;
   const visible = invoiceData.filter(sale => {
     const pageItems = sale.items.filter(item => productBelongsToPage(item.id));
     const names = pageItems.map(item => products.find(product => product.id === Number(item.id))?.name || "").join(" ");
     const hasRequestedStatus = status === "deleted" ? Boolean(sale.deletedAt) : !sale.deletedAt;
-    return hasRequestedStatus && (day === "all" || sale.eventDay === day) && pageItems.length && `${sale.orderNumber} ${sale.localOrderNumber || ""} ${names}`.toLowerCase().includes(term);
+    return hasRequestedStatus && sale.eventDay === day && pageItems.length && `${sale.orderNumber} ${sale.localOrderNumber || ""} ${names}`.toLowerCase().includes(term);
   }).sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
   $("#emptyInvoices").hidden = visible.length !== 0;
   $("#invoiceList").innerHTML = visible.map(sale => {
@@ -436,7 +390,7 @@ async function openInvoices() {
   $("#invoicesModal").hidden = false;
   $("#invoiceSearch").value = "";
   $("#invoiceStatusFilter").value = "current";
-  $("#invoicesStatus").textContent = cloudEnabled ? "Loading invoices from all devices…" : "Showing invoices saved on this device";
+  $("#invoicesStatus").textContent = cloudEnabled ? "Loading today’s invoices from all devices…" : "Showing today’s invoices saved on this device";
   invoiceData = await loadCombinedSales();
   populateDayFilter("#invoiceDayFilter", invoiceData, selectedSalesDay);
   renderInvoices();
@@ -511,7 +465,8 @@ async function syncPendingSales() {
   if (!cloudEnabled) { setSyncStatus("offline", "Cloud not configured"); return; }
   if (!navigator.onLine) { setSyncStatus("offline", "Offline · sales queued"); return; }
   if (syncInProgress) return;
-  const pending = sales.filter(sale => !sale.synced);
+  const today = eventDayFromDate();
+  const pending = sales.filter(sale => !sale.synced && sale.eventDay === today);
   if (!pending.length) { setSyncStatus("", "All sales synced"); return; }
   syncInProgress = true;
   setSyncStatus("syncing", `Syncing ${pending.length} sale${pending.length === 1 ? "" : "s"}…`);
@@ -529,23 +484,25 @@ async function syncPendingSales() {
 }
 
 async function loadCombinedSales() {
-  if (!cloudEnabled || !navigator.onLine) return sales;
+  const today = eventDayFromDate();
+  const todaySales = sale => sale.eventDay === today;
+  if (!cloudEnabled || !navigator.onLine) return sales.filter(todaySales);
   await syncPendingSales();
   try {
     const remote = [];
     const pageSize = 1000;
     for (let offset = 0; ; offset += pageSize) {
-      const page = await supabaseRequest(`sales_orders?select=id,order_number,local_order_number,terminal_id,event_day,completed_at,items,deleted_at&order=completed_at.asc&limit=${pageSize}&offset=${offset}`);
+      const page = await supabaseRequest(`sales_orders?select=id,order_number,local_order_number,terminal_id,event_day,completed_at,items,deleted_at&event_day=eq.${encodeURIComponent(today)}&order=completed_at.asc&limit=${pageSize}&offset=${offset}`);
       remote.push(...page);
       if (page.length < pageSize) break;
     }
     const serverSales = remote.map(row => ({ id: row.id, orderNumber: row.order_number, localOrderNumber: row.local_order_number, terminalId: row.terminal_id, eventDay: row.event_day || eventDayFromDate(row.completed_at), completedAt: row.completed_at, items: row.items, deletedAt: row.deleted_at || null, synced: true }));
-    const pending = sales.filter(sale => !sale.synced);
+    const pending = sales.filter(sale => !sale.synced && todaySales(sale));
     const pendingIds = new Set(pending.map(sale => sale.id));
-    return [...serverSales.filter(sale => !pendingIds.has(sale.id)), ...pending];
+    return [...serverSales.filter(todaySales).filter(sale => !pendingIds.has(sale.id)), ...pending];
   } catch (error) {
     console.warn(error);
-    return sales;
+    return sales.filter(todaySales);
   }
 }
 
