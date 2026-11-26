@@ -82,6 +82,7 @@ const terminalId = localStorage.getItem("kermessTerminalId") || makeId();
 localStorage.setItem("kermessTerminalId", terminalId);
 
 const EVENT_TIME_ZONE = "Asia/Beirut";
+const EXTRA_ACCESSIBLE_SALES_DAYS = ["2026-11-26"];
 function eventDayFromDate(value = new Date()) {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: EVENT_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(value));
   const get = type => parts.find(part => part.type === type)?.value;
@@ -90,6 +91,12 @@ function eventDayFromDate(value = new Date()) {
 function formatEventDay(day) {
   if (!day) return "Unknown day";
   return new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`));
+}
+function accessibleSalesDays() {
+  return [...new Set([eventDayFromDate(), ...EXTRA_ACCESSIBLE_SALES_DAYS])];
+}
+function isAccessibleSalesDay(day) {
+  return accessibleSalesDays().includes(day);
 }
 let selectedSalesDay = eventDayFromDate();
 localStorage.setItem("kermessSalesDay", selectedSalesDay);
@@ -144,9 +151,9 @@ function readLegacyDonation(record) {
 
 function populateDayFilter(selector, source, preferred = selectedSalesDay) {
   const select = $(selector);
-  const today = eventDayFromDate();
-  select.innerHTML = `<option value="${today}">${formatEventDay(today)}</option>`;
-  select.value = today;
+  const allowedDays = accessibleSalesDays();
+  select.innerHTML = allowedDays.map(day => `<option value="${day}">${formatEventDay(day)}</option>`).join("");
+  select.value = allowedDays.includes(preferred) ? preferred : eventDayFromDate();
 }
 
 function closeDayWarning() { $("#dayWarningModal").hidden = true; }
@@ -413,7 +420,7 @@ function sortReportRows(rows) {
 }
 
 function renderReport() {
-  const day = eventDayFromDate();
+  const day = $("#reportDayFilter").value || eventDayFromDate();
   const activeRecords = reportSource.filter(record => !record.deletedAt && record.eventDay === day);
   const relevantSales = activeRecords
     .map(sale => ({ ...sale, items: sale.items.filter(item => productBelongsToPage(item.id)) }))
@@ -468,14 +475,13 @@ function renderDonationReport(total) {
 async function openReport() {
   $("#reportModal").hidden = false;
   $("#reportSyncStatus").textContent = cloudEnabled ? "Loading combined report…" : "Local device report";
-  const day = eventDayFromDate();
-  reportSource = sales.filter(sale => sale.eventDay === day);
-  reportDonations = activitiesOnly ? [] : donations.filter(donation => donation.eventDay === day);
+  reportSource = sales.filter(sale => isAccessibleSalesDay(sale.eventDay));
+  reportDonations = activitiesOnly ? [] : donations.filter(donation => isAccessibleSalesDay(donation.eventDay));
   populateDayFilter("#reportDayFilter", reportSource, selectedSalesDay);
   renderReport();
   [reportSource, reportDonations] = await Promise.all([
     loadCombinedSales(),
-    activitiesOnly ? [] : loadCombinedDonations(day)
+    activitiesOnly ? [] : loadCombinedDonations()
   ]);
   populateDayFilter("#reportDayFilter", reportSource, $("#reportDayFilter").value);
   renderReport();
@@ -487,7 +493,7 @@ function closeReport() { $("#reportModal").hidden = true; }
 
 function exportReport() {
   const heading = ["Sales day", "Item", "Provider", "Contact", "Items sold", "Sale price LBP", "Provider per item LBP", "Profit per item LBP", "Total to provider LBP", "Total profit LBP"];
-  const selectedDay = eventDayFromDate();
+  const selectedDay = $("#reportDayFilter").value || eventDayFromDate();
   const body = sortReportRows(reportData(lastReportSales)).map(row => [selectedDay === "all" ? "All event days" : selectedDay, row.name, row.provider || "Pending", row.contact || "", row.quantity, row.price, row.cost ?? "Pending", row.cost == null ? "Pending" : row.price - row.cost, row.payment ?? "Pending", row.profit ?? "Pending"]);
   if (!activitiesOnly) {
     heading.push("Record type", "Donation number", "Amount received", "Currency");
@@ -506,7 +512,7 @@ function exportReport() {
 
 function renderInvoices() {
   const term = $("#invoiceSearch").value.trim().toLowerCase();
-  const day = eventDayFromDate();
+  const day = $("#invoiceDayFilter").value || eventDayFromDate();
   const status = $("#invoiceStatusFilter").value;
   const visible = invoiceData.filter(sale => {
     const pageItems = sale.items.filter(item => productBelongsToPage(item.id));
@@ -534,7 +540,7 @@ async function openInvoices() {
   $("#invoicesModal").hidden = false;
   $("#invoiceSearch").value = "";
   $("#invoiceStatusFilter").value = "current";
-  $("#invoicesStatus").textContent = cloudEnabled ? "Loading today’s invoices from all devices…" : "Showing today’s invoices saved on this device";
+  $("#invoicesStatus").textContent = cloudEnabled ? "Loading accessible invoices from all devices…" : "Showing accessible invoices saved on this device";
   invoiceData = await loadCombinedSales();
   populateDayFilter("#invoiceDayFilter", invoiceData, selectedSalesDay);
   renderInvoices();
@@ -609,8 +615,7 @@ function syncPendingSales() {
   if (!cloudEnabled) { setSyncStatus("offline", "Cloud not configured"); return; }
   if (!navigator.onLine) { setSyncStatus("offline", "Offline · records queued"); return; }
   if (syncInProgress) return syncInProgress;
-  const today = eventDayFromDate();
-  const pendingSales = sales.filter(sale => !sale.synced && sale.eventDay === today);
+  const pendingSales = sales.filter(sale => !sale.synced && isAccessibleSalesDay(sale.eventDay));
   const pendingDonations = donations.filter(donation => !donation.synced && !donation.deletedAt);
   const count = pendingSales.length + pendingDonations.length;
   if (!count) { setSyncStatus("", "All records synced"); return; }
@@ -619,7 +624,7 @@ function syncPendingSales() {
     .then(results => {
       const failed = results.filter(result => result.status === "rejected");
       failed.forEach(result => console.warn(result.reason));
-      const stillPending = sales.some(sale => !sale.synced && sale.eventDay === today) ||
+      const stillPending = sales.some(sale => !sale.synced && isAccessibleSalesDay(sale.eventDay)) ||
         donations.some(donation => !donation.synced && !donation.deletedAt);
       if (failed.length || stillPending) setSyncStatus("offline", "Saved locally · sync pending");
       else setSyncStatus("", "All records synced");
@@ -652,8 +657,10 @@ async function uploadDonations(pending) {
   localStorage.setItem("kermessDonations", JSON.stringify(donations));
 }
 
-async function loadCombinedDonations(day) {
-  const local = () => donations.filter(donation => donation.eventDay === day);
+async function loadCombinedDonations() {
+  const allowedDays = accessibleSalesDays();
+  const isAllowed = donation => allowedDays.includes(donation.eventDay);
+  const local = () => donations.filter(isAllowed);
   if (!cloudEnabled || !navigator.onLine) return local();
   await syncPendingSales();
   try {
@@ -661,7 +668,8 @@ async function loadCombinedDonations(day) {
     const pageSize = 1000;
     const columns = "id,donation_number,terminal_id,local_number,event_day,received_at,amount_received,currency,amount_lbp,deleted_at";
     for (let offset = 0; ; offset += pageSize) {
-      const page = await supabaseRequest(`donations?select=${columns}&event_day=eq.${encodeURIComponent(day)}&order=received_at.asc,id.asc&limit=${pageSize}&offset=${offset}`);
+      const dayFilter = encodeURIComponent(`(${allowedDays.join(",")})`);
+      const page = await supabaseRequest(`donations?select=${columns}&event_day=in.${dayFilter}&order=received_at.asc,id.asc&limit=${pageSize}&offset=${offset}`);
       page.forEach(row => combined.set(row.id, {
         id: row.id, number: row.donation_number, terminalId: row.terminal_id, localNumber: row.local_number,
         eventDay: row.event_day, completedAt: row.received_at, enteredAmount: Number(row.amount_received),
@@ -684,27 +692,28 @@ async function loadCombinedDonations(day) {
 }
 
 async function loadCombinedSales() {
-  const today = eventDayFromDate();
-  const todaySales = sale => sale.eventDay === today;
-  if (!cloudEnabled || !navigator.onLine) return sales.filter(todaySales);
+  const allowedDays = accessibleSalesDays();
+  const isAllowed = sale => allowedDays.includes(sale.eventDay);
+  if (!cloudEnabled || !navigator.onLine) return sales.filter(isAllowed);
   await syncPendingSales();
   try {
     const remote = [];
     const pageSize = 1000;
     for (let offset = 0; ; offset += pageSize) {
-      const page = await supabaseRequest(`sales_orders?select=id,order_number,local_order_number,terminal_id,event_day,completed_at,items,deleted_at&event_day=eq.${encodeURIComponent(today)}&order=completed_at.asc&limit=${pageSize}&offset=${offset}`);
+      const dayFilter = encodeURIComponent(`(${allowedDays.join(",")})`);
+      const page = await supabaseRequest(`sales_orders?select=id,order_number,local_order_number,terminal_id,event_day,completed_at,items,deleted_at&event_day=in.${dayFilter}&order=completed_at.asc&limit=${pageSize}&offset=${offset}`);
       remote.push(...page);
       if (page.length < pageSize) break;
     }
     const serverSales = remote.map(row => ({ id: row.id, orderNumber: row.order_number, localOrderNumber: row.local_order_number, terminalId: row.terminal_id, eventDay: row.event_day || eventDayFromDate(row.completed_at), completedAt: row.completed_at, items: row.items, deletedAt: row.deleted_at || null, synced: true }));
-    const combined = new Map(serverSales.filter(todaySales).map(sale => [sale.id, sale]));
-    sales.filter(todaySales).forEach(sale => {
+    const combined = new Map(serverSales.filter(isAllowed).map(sale => [sale.id, sale]));
+    sales.filter(isAllowed).forEach(sale => {
       if (!sale.synced) combined.set(sale.id, sale);
     });
     return [...combined.values()];
   } catch (error) {
     console.warn(error);
-    return sales.filter(todaySales);
+    return sales.filter(isAllowed);
   }
 }
 

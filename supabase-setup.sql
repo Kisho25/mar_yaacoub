@@ -23,13 +23,20 @@ alter table public.sales_orders add column if not exists deleted_at timestamptz;
 
 alter table public.sales_orders enable row level security;
 
--- Festival POS devices may insert orders and read the combined report.
+-- Festival POS devices may insert orders and read November 26 plus the current Beirut day.
 -- Updates are allowed only for the same order UUID, which makes retries idempotent.
 create policy "festival devices insert sales"
 on public.sales_orders for insert to anon with check (true);
 
-create policy "festival devices read report"
-on public.sales_orders for select to anon using (true);
+drop policy if exists "festival devices read report" on public.sales_orders;
+drop policy if exists "festival devices read todays sales" on public.sales_orders;
+drop policy if exists "festival devices read allowed sales" on public.sales_orders;
+create policy "festival devices read allowed sales"
+on public.sales_orders for select to anon
+using (
+  event_day = date '2026-11-26'
+  or event_day = ((now() at time zone 'Asia/Beirut')::date)
+);
 
 create policy "festival devices update queued sale"
 on public.sales_orders for update to anon using (true) with check (true);

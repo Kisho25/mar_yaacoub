@@ -3,9 +3,10 @@
 1. Create a Supabase project at <https://supabase.com/dashboard>.
 2. Open **SQL Editor**, paste the contents of `supabase-setup.sql`, and run it once.
 3. In **SQL Editor**, run [supabase-donations-migration.sql](supabase-donations-migration.sql).
-4. In **Project Settings → API**, copy the Project URL and publishable/anon key.
-5. Paste those two values into `config.js`.
-6. Upload the complete website folder to your web host.
+4. For an existing project, run [supabase-sales-access-2026-11-26.sql](supabase-sales-access-2026-11-26.sql) so the website can read only November 26, 2026 and the current Beirut day.
+5. In **Project Settings → API**, copy the Project URL and publishable/anon key.
+6. Paste those two values into `config.js`.
+7. Upload the complete website folder to your web host.
 
 Every device must open the same hosted website. Completed sales are written locally first, so the cashier can immediately continue. The POS synchronizes automatically at startup, when connectivity returns, and periodically while online.
 
